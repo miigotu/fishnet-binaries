@@ -11,15 +11,6 @@ on:
   workflow_dispatch:
   push:
 
-env:
-  FISHNET_SOURCE: ${{ env.RUNNER_TEMP }}/fishnet
-  FISHNET_OUTPUT: ${{ env.RUNNER_TEMP }}/fishnet_output
-  FISHNET_BINARIES: ${{ env.RUNNER_TEMP }}/fishnet_binaries
-  FISHNET_LOG: ${{ env.RUNNER_TEMP }}/commit_log
-  FISHNET_HASH: ${{ env.RUNNER_TEMP }}/commit_hash
-  BUILDX_FROM: ${{ env.RUNNER_TEMP }}/buildx_from
-  BUILDX_TO: ${{ env.RUNNER_TEMP }}/buildx_to
-
 jobs:
   Build:
     strategy:
@@ -29,6 +20,14 @@ jobs:
       fail-fast: true
     continue-on-error: false
     runs-on: ubuntu-latest
+    env:
+      FISHNET_SOURCE: "${{ RUNNER_TEMP }}/fishnet_source"
+      FISHNET_OUTPUT: "${{ RUNNER_TEMP }}/fishnet_output"
+      FISHNET_BINARIES: "${{ RUNNER_TEMP }}/fishnet_binaries"
+      FISHNET_LOG: "${{ RUNNER_TEMP }}/fishnet_commit_log"
+      FISHNET_HASH: "${{ RUNNER_TEMP }}/fishnet_commit_hash"
+      BUILDX_FROM: "${{ RUNNER_TEMP }}/buildx_from"
+      BUILDX_TO: "${{ RUNNER_TEMP }}/buildx_to"
     steps:
       - name: Cancel Previous Runs
         if: success() && !env.ACT
@@ -83,7 +82,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           repository: lichess-org/fishnet
-          path: ${{ env.FISHNET_SOURCE }}
+          path: "${{ env.FISHNET_SOURCE }}"
           fetch-depth: 1
           persist-credentials: false
           submodules: recursive
@@ -94,38 +93,32 @@ jobs:
       - name: Cache Docker layers
         uses: actions/cache@v3
         with:
-          path: ${{ env.BUILDX_FROM }}
+          path: "${{ env.BUILDX_FROM }}"
           key: ${{ runner.os }}-buildx-${{ github.sha }}
           restore-keys: ${{ runner.os }}-buildx-
       - name: Build
         uses: docker/build-push-action@v2
-        env:
-          FISHNET_SOURCE: ${{ env.FISHNET_SOURCE }}
-          FISHNET_LOG: ${{ env.FISHNET_LOG }}
-          FISHNET_HASH: ${{ env.FISHNET_HASH }}
         with:
           context: .
           platforms: linux/amd64,linux/arm/v7,linux/arm64/v8,
           push: false
-          outputs: type=local,dest=${{ env.FISHNET_OUTPUT }}
-          cache-from: type=local,src=${{ env.BUILDX_FROM }}
-          cache-to: type=local,dest=${{ env.BUILDX_TO }}
+          outputs: type=local,dest="${{ env.FISHNET_OUTPUT }}"
+          cache-from: type=local,src="${{ env.BUILDX_FROM }}"
+          cache-to: type=local,dest="${{ env.BUILDX_TO }}"
       - name: Move cache
         run: |
-          if [ -e ${{ env.BUILDX_TO }} ]; then rm -rf ${{ env.BUILDX_FROM }} && mv ${{ env.BUILDX_TO }} ${{ env.BUILDX_FROM }}; fi
+          if [ -e "${{ env.BUILDX_TO }}" ]; then rm -rf "${{ env.BUILDX_FROM" }} && mv "${{ env.BUILDX_TO" }} "${{ env.BUILDX_FROM }}"; fi
       - name: Rename
         run: |
-          mkdir ${{ env.FISHNET_BINARIES }}
-          python3 scripts/rename_files.py ${{ env.FISHNET_OUTPUT }} ${{ env.FISHNET_BINARIES }}
+          mkdir -p "${{ env.FISHNET_BINARIES }}"
+          python3 scripts/rename_files.py --binary_directory "${{ env.FISHNET_BINARIES }}" --output_directory "${{ env.FISHNET_OUTPUT }}"
       - name: Get new binary file names and fishnet info
         id: info
         run: |
-          echo "::set-output name=binaries::$(python3 scripts/rename_files.py ${{ env.FISHNET_OUTPUT }} ${{ env.FISHNET_BINARIES }})"
-          echo "::set-output name=tag::$(cat ${{ env.FISHNET_HASH }})"
-          echo "::set-output name=log::$(cat ${{ env.FISHNET_LOG }})"
+          echo "::set-output name=binaries::$(python3 scripts/rename_files.py --binary_directory "${{ env.FISHNET_BINARIES }}" --output_directory "${{ env.FISHNET_OUTPUT }}" --get_names)"
+          echo "::set-output name=tag::$(cat "${{ env.FISHNET_HASH }}")"
+          echo "::set-output name=log::$(cat "${{ env.FISHNET_LOG }}")"
       - name: Get fishnet info
-        env:
-          FISHNET_SOURCE: ${{ env.FISHNET_SOURCE }}
         run: scripts/get-git-info.sh
         shell: bash
       - name: Release

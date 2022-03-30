@@ -35,10 +35,13 @@ def main():
         parts = str(relative).split(os.sep)
         new_location = args.output_directory / "-".join(parts[-1:] + parts[:-1])
 
-        final_file_names.append(new_location)
-        os.rename(binary, new_location)
+        if args.get_names:
+            final_file_names.append(new_location)
+        else:
+            os.rename(binary, new_location)
 
-    return " ".join(str(item) for item in final_file_names)
+    if args.get_names:
+        return " ".join(f"\"{item}\"" for item in final_file_names)
 
 
 if __name__ == "__main__":
