@@ -1,0 +1,139 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Build
+
+on:
+  workflow_run:
+    workflows: ["trigger"]
+    types: [completed]
+
+  workflow_dispatch:
+  push:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  Cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wash your a$$ (clean the runs)
+        uses: Mattraks/delete-workflow-runs@main
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+  Build:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+        python-version: [ "3.9", "3.10" ]
+      fail-fast: true
+    continue-on-error: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout self (mirror) and grab the fishnet
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: recursive
+          ref: "main"
+#          ref: ${{ github.ref || "main" }}
+      - name: Bait the line (QEMU)
+        uses: docker/setup-qemu-action@v2
+      - name: Get your feet wet, cast it out (Buildx)
+        uses: docker/setup-buildx-action@v2
+      - name: Cache a nap
+        uses: actions/cache@v3
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-buildx-
+      - name: Hurry up and wait while we build patience
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/arm/v7,linux/arm/v6
+          push: false
+          outputs: type=local,dest=fishnet_output
+          target: export-stage
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
+      # Temp fix
+      # https://github.com/docker/build-push-action/issues/252
+      # https://github.com/moby/buildkit/issues/1896
+      - name: Got a bite, move cache
+        if: always()
+        run: |
+          if [ -e /tmp/.buildx-cache-new ]; then rm -rf /tmp/.buildx-cache && mv /tmp/.buildx-cache-new /tmp/.buildx-cache; fi
+      - name: Reel in linux/386 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: 386
+          path: fishnet_output/linux_386
+      - name: Reel in linux/amd64 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: amd64
+          path: fishnet_output/linux_amd64
+      - name: Reel in linux/amd64/v2 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: amd64/v2
+          path: fishnet_output/linux_amd64_v2
+      - name: Reel in linux/amd64/v3 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: amd64/v3
+          path: fishnet_output/linux_amd64_v3
+      - name: Reel in linux/arm64 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: arm64
+          path: fishnet_output/linux_arm64
+      - name: Reel in linux/arm/v6 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: arm/v6
+          path: fishnet_output/linux_arm_v6
+      - name: Reel in linux/arm/v7 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: arm/v7
+          path: fishnet_output/linux_arm_v7
+      - name: Reel in linux/mips64 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: mips64
+          path: fishnet_output/linux_mips64
+      - name: Reel in linux/mips64le binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: mips64le
+          path: fishnet_output/linux_mips64le
+      - name: Reel in linux/ppc64le binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: ppc64le
+          path: fishnet_output/linux_ppc64le
+      - name: Reel in linux/riscv64 binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: riscv64
+          path: fishnet_output/linux_riscv64
+      - name: Reel in linux/s390x binaries
+        uses: actions/upload-artifact@v3
+        with:
+          name: s390x
+          path: fishnet_output/linux_s390x
+      - name: Release the fish, the net is full
+        uses: meeDamian/github-release@2.0
+        with:
+          token: ${{ github.token }}
+          tag: $(git -C fishnet rev-parse --short HEAD)
+          body: $(git -C fishnet log --since="yesterday" --no-decorate)
+          files: fishnet_output
+          gzip: folders

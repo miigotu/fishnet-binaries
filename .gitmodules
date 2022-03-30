@@ -1,0 +1,3 @@
+[submodule "fishnet"]
+	path = fishnet
+	url = https://github.com/lichess-org/fishnet.git
