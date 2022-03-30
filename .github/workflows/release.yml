@@ -1,0 +1,138 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Build
+
+on:
+  workflow_run:
+    workflows: ["trigger"]
+    types: [completed]
+
+  workflow_dispatch:
+  push:
+
+env:
+  FISHNET_SOURCE: ${{ env.RUNNER_TEMP }}/fishnet
+  FISHNET_OUTPUT: ${{ env.RUNNER_TEMP }}/fishnet_output
+  FISHNET_BINARIES: ${{ env.RUNNER_TEMP }}/fishnet_binaries
+  FISHNET_LOG: ${{ env.RUNNER_TEMP }}/commit_log
+  FISHNET_HASH: ${{ env.RUNNER_TEMP }}/commit_hash
+  BUILDX_FROM: ${{ env.RUNNER_TEMP }}/buildx_from
+  BUILDX_TO: ${{ env.RUNNER_TEMP }}/buildx_to
+
+jobs:
+  Build:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+        python-version: [ 3.9 ]
+      fail-fast: true
+    continue-on-error: false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel Previous Runs
+        if: success() && !env.ACT
+        uses: styfle/cancel-workflow-action@0.9.1
+        with:
+          access_token: ${{ github.token }}
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Restore pip cache
+        uses: actions/cache@v3
+        with:
+          path: $(python -m pip cache dir)
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: ${{ runner.os }}-pip-${{ matrix.python-version }}-
+      - name: Install Poetry
+        uses: snok/install-poetry@v1.3.1
+        with:
+          version: 1.1.10
+          virtualenvs-path: .venv
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          installer-parallel: false
+      - name: Restore poetry cache
+        uses: actions/cache@v3
+        with:
+          path: $(poetry config cache-dir)
+          key: ${{ runner.os }}-poetry-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml') }}
+      - name: Restore virtualenv
+        uses: actions/cache@v3
+        with:
+          path: .venv
+          key: ${{ runner.os }}-virtualenv-${{ matrix.python-version }}-${{ hashFiles('**/pyproject.toml') }}
+      - name: Install dependencies
+        run: |
+          poetry install --no-interaction --no-root
+          pip install poethepoet
+      - name: Lint shell scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          format: diff
+      - name: Lint Python
+        run: poe lint
+        shell: bash
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          repository: lichess-org/fishnet
+          path: ${{ env.FISHNET_SOURCE }}
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: recursive
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+      - name: Cache Docker layers
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.BUILDX_FROM }}
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-buildx-
+      - name: Build
+        uses: docker/build-push-action@v2
+        env:
+          FISHNET_SOURCE: ${{ env.FISHNET_SOURCE }}
+          FISHNET_LOG: ${{ env.FISHNET_LOG }}
+          FISHNET_HASH: ${{ env.FISHNET_HASH }}
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm/v7,linux/arm64/v8,
+          push: false
+          outputs: type=local,dest=${{ env.FISHNET_OUTPUT }}
+          cache-from: type=local,src=${{ env.BUILDX_FROM }}
+          cache-to: type=local,dest=${{ env.BUILDX_TO }}
+      - name: Move cache
+        run: |
+          if [ -e ${{ env.BUILDX_TO }} ]; then rm -rf ${{ env.BUILDX_FROM }} && mv ${{ env.BUILDX_TO }} ${{ env.BUILDX_FROM }}; fi
+      - name: Rename
+        run: |
+          mkdir ${{ env.FISHNET_BINARIES }}
+          python3 scripts/rename_files.py ${{ env.FISHNET_OUTPUT }} ${{ env.FISHNET_BINARIES }}
+      - name: Get new binary file names and fishnet info
+        id: info
+        run: |
+          echo "::set-output name=binaries::$(python3 scripts/rename_files.py ${{ env.FISHNET_OUTPUT }} ${{ env.FISHNET_BINARIES }})"
+          echo "::set-output name=tag::$(cat ${{ env.FISHNET_HASH }})"
+          echo "::set-output name=log::$(cat ${{ env.FISHNET_LOG }})"
+      - name: Get fishnet info
+        env:
+          FISHNET_SOURCE: ${{ env.FISHNET_SOURCE }}
+        run: scripts/get-git-info.sh
+        shell: bash
+      - name: Release
+        uses: meeDamian/github-release@2.0
+        with:
+          token: ${{ github.token }}
+          tag: ${{ steps.info.outputs.tag }}
+          body: ${{ steps.info.outputs.log }}
+          files: ${{ steps.info.outputs.binaries }}
+          gzip: folders
