@@ -19,7 +19,7 @@ packages = [{ include = "scripts" }]
 python = ">=3.7,<4.0"
 
 [tool.poetry.dev-dependencies]
-poethepoet = "^0.13.1"
+poethepoet = "^0.14.0"
 black = "^22.3.0"
 flake8-black = "^0.3.2"
 pytest-black = "^0.3.12"
