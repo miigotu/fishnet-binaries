@@ -1,11 +1,7 @@
 name: Trigger
 
-#on:
-#  schedule:
-#    - cron:  '0 5 * * *'
-#  workflow_dispatch:
-
-on: workflow_dispatch
+on: 
+  workflow_dispatch
 
 jobs:
   Trigger:
