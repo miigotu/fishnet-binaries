@@ -21,13 +21,13 @@ jobs:
     continue-on-error: false
     runs-on: ubuntu-latest
     env:
-      FISHNET_SOURCE: "${{ RUNNER_TEMP }}/fishnet_source"
-      FISHNET_OUTPUT: "${{ RUNNER_TEMP }}/fishnet_output"
-      FISHNET_BINARIES: "${{ RUNNER_TEMP }}/fishnet_binaries"
-      FISHNET_LOG: "${{ RUNNER_TEMP }}/fishnet_commit_log"
-      FISHNET_HASH: "${{ RUNNER_TEMP }}/fishnet_commit_hash"
-      BUILDX_FROM: "${{ RUNNER_TEMP }}/buildx_from"
-      BUILDX_TO: "${{ RUNNER_TEMP }}/buildx_to"
+      FISHNET_SOURCE: "$RUNNER_TEMP/fishnet_source"
+      FISHNET_OUTPUT: "$RUNNER_TEMP/fishnet_output"
+      FISHNET_BINARIES: "$RUNNER_TEMP/fishnet_binaries"
+      FISHNET_LOG: "$RUNNER_TEMP/fishnet_commit_log"
+      FISHNET_HASH: "$RUNNER_TEMP/fishnet_commit_hash"
+      BUILDX_FROM: "$RUNNER_TEMP/buildx_from"
+      BUILDX_TO: "$RUNNER_TEMP/buildx_to"
     steps:
       - name: Cancel Previous Runs
         if: success() && !env.ACT
