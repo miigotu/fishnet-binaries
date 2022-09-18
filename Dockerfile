@@ -1,4 +1,4 @@
-FROM rust:1.62.1 AS builder
+FROM rust:1.63.0 AS builder
 WORKDIR /fishnet
 COPY $FISHNET_SOURCE .
 RUN cargo build --release -vv && mkdir -p /output/$TARGETPLATFORM && mv /fishnet/target/release/fishnet /output/$TARGETPLATFORM/fishnet
