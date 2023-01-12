@@ -1,4 +1,4 @@
-FROM --platform=$TARGETPLATFORM rust:1.65.0 AS builder
+FROM --platform=$TARGETPLATFORM rust:1.66.1 AS builder
 COPY . .
 WORKDIR /fishnet
 
